@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% block head %}
+    <title>Route Generator</title>
+    
+    <!--Use leaflet.js-->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* Give the map a visible size */
+        #map { height: 500px; width: 100%; margin-top: 20px; }
+    </style>
+{% endblock %}
+{% block body %}
+    <h1>Automatic Running Route Generator</h1>
+    <p class = 'name'>Built By <a href = "https://github.com/TyceXyooj">Tyce Xiong</a></p>
+    <p class="name"><a href = "https://github.com/TyceXyooj/RunningRouteGenerator">GitHub Repository</a></p>
+
+    <!--Form for user to input address and desired distance-->
+    <form action="/get-route" method="GET" id="route-form">
+        <table class="input">
+            <tr>
+                <td>
+                    <label for="street">Street</label>
+                </td>  
+                <td>
+                    <input type="text" name="street" id="street">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="city">City</label>
+                </td>  
+                <td>
+                    <input type="text" name="city" id="city">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="state">State</label>
+                </td>  
+                <td>
+                    <select name="state" id="state">
+                        <option value="" disabled selected>Select a State</option>
+                        <option value="AL">Alabama</option>
+                        <option value="AK">Alaska</option>
+                        <option value="AZ">Arizona</option>
+                        <option value="AR">Arkansas</option>
+                        <option value="CA">California</option>
+                        <option value="CO">Colorado</option>
+                        <option value="CT">Connecticut</option>
+                        <option value="DE">Delaware</option>
+                        <option value="FL">Florida</option>
+                        <option value="GA">Georgia</option>
+                        <option value="HI">Hawaii</option>
+                        <option value="ID">Idaho</option>
+                        <option value="IL">Illinois</option>
+                        <option value="IN">Indiana</option>
+                        <option value="IA">Iowa</option>
+                        <option value="KS">Kansas</option>
+                        <option value="KY">Kentucky</option>
+                        <option value="LA">Louisiana</option>
+                        <option value="ME">Maine</option>
+                        <option value="MD">Maryland</option>
+                        <option value="MA">Massachusetts</option>
+                        <option value="MI">Michigan</option>
+                        <option value="MN">Minnesota</option>
+                        <option value="MS">Mississippi</option>
+                        <option value="MO">Missouri</option>
+                        <option value="MT">Montana</option>
+                        <option value="NE">Nebraska</option>
+                        <option value="NV">Nevada</option>
+                        <option value="NH">New Hampshire</option>
+                        <option value="NJ">New Jersey</option>
+                        <option value="NM">New Mexico</option>
+                        <option value="NY">New York</option>
+                        <option value="NC">North Carolina</option>
+                        <option value="ND">North Dakota</option>
+                        <option value="OH">Ohio</option>
+                        <option value="OK">Oklahoma</option>
+                        <option value="OR">Oregon</option>
+                        <option value="PA">Pennsylvania</option>
+                        <option value="RI">Rhode Island</option>
+                        <option value="SC">South Carolina</option>
+                        <option value="SD">South Dakota</option>
+                        <option value="TN">Tennessee</option>
+                        <option value="TX">Texas</option>
+                        <option value="UT">Utah</option>
+                        <option value="VT">Vermont</option>
+                        <option value="VA">Virginia</option>
+                        <option value="WA">Washington</option>
+                        <option value="WV">West Virginia</option>
+                        <option value="WI">Wisconsin</option>
+                        <option value="WY">Wyoming</option>
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="country">Country</label>
+                </td>  
+                <td>
+                    <input type="text" name="country" id="country">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="zip">Zip</label>
+                </td>
+                <td>
+                    <input type="text" name="zip" id="zip" minlength="5" maxlength="5">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <label for="distance">Distance (Meters)</label>
+                </td>  
+                <td>
+                    <input type="number" step="any" name="distance" id="distance">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <input type="submit" value="Generate Route!">
+                </td>
+                <td>
+                    <!--Place holder for the color-->
+                </td>
+            </tr>
+        </table>
+    </form>
+
+    <p id='loading_label' style='text-align: center;' hidden>Loading...</p>
+    <br>
+    <img id="loading" src='{{ url_for("static", filename = "img/loader-icon.svg")}}' alt="loading icon" hidden />
+
+    <!--The map display-->
+    <h2>Generated Route</h2>
+
+    <!--Where the map will appear-->
+    <div id="map"></div>
+
+    <!--importing leaflet.js library-->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!--Script to build map-->
+    <script>
+        // A. Initialize the map and loading screen
+        const map = L.map('map').setView([44.8788, -91.9197], 13);
+        const img = document.getElementById("loading");
+        const label = document.getElementById('loading_label');
+
+        // B. Add OpenStreetMap background tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let routeLayer = null; // Keep track of the route so we can clear/update it later
+
+        // C. Listen for when the user clicks "Generate Route!"
+        document.getElementById('route-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // STOP the browser from navigating away to a new page!
+
+            //show loading icon
+            img.hidden = !img.hidden;
+            label.hidden = !label.hidden;
+
+            // Grab the values the user typed into the form inputs
+            const street = document.getElementById('street').value;
+            const city = document.getElementById('city').value;
+            const state = document.getElementById('state').value;
+            const zip = document.getElementById('zip').value;
+            const distance = document.getElementById('distance').value;
+
+            // Build the dynamic URL using encodeURIComponent to handle spaces/special characters safely
+            const dynamicUrl = `/get-route?street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&zip=${encodeURIComponent(zip)}&distance=${encodeURIComponent(distance)}`;
+
+            // Fetch the route data from your Python/Flask backend
+            fetch(dynamicUrl)
+                .then(response => response.json())
+                .then(geojsonData => {
+                    console.log("Received GeoJSON from Python:", geojsonData);
+
+                    // D. Check if Python returned an error string instead of a route
+                    if (typeof geojsonData === 'string') {
+                        alert(geojsonData);
+                        return;
+                    }
+
+                    // If there's already a route drawn on the map from a previous search, remove it first
+                    if (routeLayer) {
+                        map.removeLayer(routeLayer);
+                    }
+
+                    // E. Pass the GeoJSON directly into Leaflet to draw the path!
+                    routeLayer = L.geoJSON(geojsonData, {
+                        style: {
+                            color: "#ff030b", // Bright orange line
+                            weight: 5,        // Thickness of the line
+                            opacity: 0.8
+                        }
+                    }).addTo(map);
+
+                    // F. Automatically zoom and center the map to fit the route bounds perfectly
+                    map.fitBounds(routeLayer.getBounds());
+                    //remove loading icon
+                    label.hidden = !label.hidden;
+                    img.hidden = !img.hidden;
+                })
+                .catch(error => console.error('Error loading the route:', error));
+        });
+    </script>
+{% endblock %}
